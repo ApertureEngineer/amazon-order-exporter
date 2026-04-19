@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amazon-order-exporter"
+version = "0.1.0"
+description = "Export Amazon order items from a private account using Playwright"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "OpenAI" }
+]
+dependencies = [
+  "playwright>=1.52.0",
+  "pandas>=2.2.0",
+  "openpyxl>=3.1.0",
+]
+
+[project.scripts]
+amazon-order-exporter = "amazon_order_exporter.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
