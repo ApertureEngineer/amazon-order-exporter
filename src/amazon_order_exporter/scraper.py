@@ -92,11 +92,11 @@ class AmazonScraper:
     def login_and_save_session(self) -> None:
         page = self.current_page
         page.goto(self.config.order_history_url, wait_until="domcontentloaded")
-        LOGGER.info("Bitte manuell bei Amazon anmelden und anschließend Enter im Terminal drücken.")
-        input("Wenn Login und ggf. 2FA abgeschlossen sind, Enter drücken ... ")
+        LOGGER.info("Please log in to Amazon manually, then press Enter in the terminal.")
+        input("Press Enter after login (and 2FA, if required) is complete... ")
         self.config.auth_file.parent.mkdir(parents=True, exist_ok=True)
         self.context.storage_state(path=str(self.config.auth_file))
-        LOGGER.info("Session gespeichert unter %s", self.config.auth_file)
+        LOGGER.info("Session saved to %s", self.config.auth_file)
 
     def open_order_history(self) -> None:
         page = self.current_page
@@ -130,7 +130,7 @@ class AmazonScraper:
                                 option_value = options.nth(i).get_attribute("value") or text
                                 break
                         if option_value:
-                            LOGGER.info("Versuche Jahresfilter %s über %s zu setzen", year, selector)
+                            LOGGER.info("Trying to set year filter %s via %s", year, selector)
                             select.select_option(value=option_value)
                             page.wait_for_load_state("domcontentloaded")
                             time.sleep(2)
@@ -138,7 +138,10 @@ class AmazonScraper:
                             return True
             except Exception:
                 continue
-        LOGGER.warning("Jahresfilter %s konnte nicht automatisch gesetzt werden. Export filtert lokal über Bestelldatum.", year)
+        LOGGER.warning(
+            "Year filter %s could not be set automatically. Export will filter locally by order date.",
+            year,
+        )
         return False
 
     def extract_order_blocks(self, page_no: int) -> list[OrderRecord]:
@@ -259,10 +262,10 @@ class AmazonScraper:
         seen_order_ids: set[str] = set()
 
         for page_no in range(1, max_pages + 1):
-            LOGGER.info("Lese Bestellübersicht Seite %s", page_no)
+            LOGGER.info("Reading order overview page %s", page_no)
             records = self.extract_order_blocks(page_no=page_no)
             if not records:
-                LOGGER.warning("Keine Bestellblöcke auf Seite %s gefunden", page_no)
+                LOGGER.warning("No order blocks found on page %s", page_no)
                 self.save_debug_html(f"orders_page_{page_no}")
                 break
 
@@ -275,11 +278,11 @@ class AmazonScraper:
 
             oldest_visible = min((record.order_date for record in records if record.order_date), default=None)
             if oldest_visible and date_from and oldest_visible < date_from:
-                LOGGER.info("Ältestes Datum auf Seite %s liegt vor date_from. Pagination stoppt hier.", page_no)
+                LOGGER.info("Oldest visible date on page %s is before date-from. Stopping pagination.", page_no)
                 break
 
             if page_no >= max_pages:
-                LOGGER.info("Maximale Seitenanzahl erreicht: %s", max_pages)
+                LOGGER.info("Reached maximum number of pages: %s", max_pages)
                 break
 
             if not self.goto_next_page():
@@ -377,11 +380,11 @@ class AmazonScraper:
         order_list = list(orders)
         items: list[ItemRecord] = []
         for idx, order in enumerate(order_list, start=1):
-            LOGGER.info("Lese Bestelldetails %s/%s: %s", idx, len(order_list), order.order_id)
+            LOGGER.info("Reading order details %s/%s: %s", idx, len(order_list), order.order_id)
             try:
                 order_items = self.extract_items_from_order(order)
                 items.extend(order_items)
-                LOGGER.info("  %s Artikel gefunden", len(order_items))
+                LOGGER.info("  Found %s items", len(order_items))
             except Exception as exc:
-                LOGGER.exception("Fehler beim Lesen der Bestelldetails für %s: %s", order.order_id, exc)
+                LOGGER.exception("Error while reading order details for %s: %s", order.order_id, exc)
         return items

@@ -20,22 +20,22 @@ def valid_date(value: str) -> date:
     try:
         return date.fromisoformat(value)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError(f"Ungültiges Datum: {value}. Erwartet wird YYYY-MM-DD.") from exc
+        raise argparse.ArgumentTypeError(f"Invalid date: {value}. Expected format: YYYY-MM-DD.") from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="amazon-order-exporter")
-    parser.add_argument("--verbose", action="store_true", help="Mehr Logging ausgeben")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    login_parser = subparsers.add_parser("login", help="Amazon-Session lokal speichern")
+    login_parser = subparsers.add_parser("login", help="Store Amazon session locally")
     login_parser.add_argument("--domain", default="amazon.de")
     login_parser.add_argument("--auth-file", default=".secrets/amazon_state.json")
-    login_parser.add_argument("--headless", action="store_true", help="Browser headless starten")
+    login_parser.add_argument("--headless", action="store_true", help="Start browser in headless mode")
     login_parser.add_argument("--slow-mo-ms", type=int, default=50)
 
-    export_parser = subparsers.add_parser("export", help="Bestellungen und Artikel exportieren")
+    export_parser = subparsers.add_parser("export", help="Export orders and items")
     export_parser.add_argument("--domain", default="amazon.de")
     export_parser.add_argument("--auth-file", default=".secrets/amazon_state.json")
     export_parser.add_argument("--output", default="data/output/amazon_orders.xlsx")
@@ -72,11 +72,11 @@ def run_login(args: argparse.Namespace) -> int:
 def run_export(args: argparse.Namespace) -> int:
     date_from, date_to = resolve_date_range(args)
     if date_from and date_to and date_from > date_to:
-        raise SystemExit("date-from darf nicht nach date-to liegen.")
+        raise SystemExit("date-from must not be after date-to.")
 
     auth_file = Path(args.auth_file)
     if not auth_file.exists():
-        raise SystemExit(f"Session-Datei fehlt: {auth_file}. Bitte zuerst 'amazon-order-exporter login' ausführen.")
+        raise SystemExit(f"Session file missing: {auth_file}. Please run 'amazon-order-exporter login' first.")
 
     config = ScrapeConfig(
         domain=args.domain,
@@ -116,7 +116,7 @@ def main() -> int:
     if args.command == "export":
         return run_export(args)
 
-    raise SystemExit(f"Unbekannter Befehl: {args.command}")
+    raise SystemExit(f"Unknown command: {args.command}")
 
 
 if __name__ == "__main__":

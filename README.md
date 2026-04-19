@@ -1,20 +1,20 @@
 # amazon-order-exporter
 
-Kleines privates Python-Repo, um Produktdaten aus dem Amazon-Bestellverlauf eines normalen Privatkontos nach Excel zu exportieren.
+A small private Python repository to export product data from Amazon order history (personal account) into Excel.
 
-## Ziel
+## Goal
 
-Dieses Repo lädt **nur Bestelldaten und Produkttitel**.
+This repository fetches **only order data and product titles**.
 
-Es macht **keine** fachliche Klassifizierung wie `Privat` / `Gewerbe`. Diese Zuordnung kann später manuell oder in einem separaten Repo erfolgen.
+It does **not** perform business classification such as `personal` vs `commercial`. That classification can be done later manually or in a separate repository.
 
 ## Features
 
-- manueller Login mit lokaler Session-Datei
-- Export eines Geschäftsjahres oder eines frei gewählten Datumsbereichs
-- Produkttitel aus Bestellübersicht und Bestelldetails
-- Ausgabe nach Excel (`orders`, `items`) und CSV
-- Debug-HTML optional für Selektor-Anpassungen
+- Manual login with local session file
+- Export for a fiscal year or a custom date range
+- Product titles from order overview and order detail pages
+- Output to Excel (`orders`, `items`) and CSV
+- Optional debug HTML for selector adjustments
 
 ## Setup
 
@@ -38,40 +38,40 @@ pip install -e .
 playwright install chromium
 ```
 
-## 1) Session speichern
+## 1) Save session
 
 ```bash
 amazon-order-exporter login --domain amazon.de
 ```
 
-Dann öffnet sich Chromium. Du meldest dich einmal manuell an und bestätigst anschließend im Terminal mit Enter.
+Chromium will open. Log in manually once and then confirm in the terminal by pressing Enter.
 
-Die Session wird lokal gespeichert unter:
+The session is stored locally at:
 
 ```text
 .secrets/amazon_state.json
 ```
 
-## 2) Export eines Jahres
+## 2) Export one year
 
 ```bash
 amazon-order-exporter export --year 2025 --domain amazon.de --output data/output/amazon_orders_2025.xlsx
 ```
 
-## 3) Export eines Datumsbereichs
+## 3) Export a date range
 
 ```bash
 amazon-order-exporter export --date-from 2025-01-01 --date-to 2025-12-31 --domain amazon.de --output data/output/amazon_orders_2025.xlsx
 ```
 
-## Ergebnis
+## Output
 
-Die Excel-Datei enthält zwei Sheets:
+The Excel file contains two sheets:
 
-- `orders`: eine Zeile pro Bestellung
-- `items`: eine Zeile pro Produkt
+- `orders`: one row per order
+- `items`: one row per product
 
-Typische Spalten:
+Typical columns:
 
 - `order_id`
 - `order_date`
@@ -81,19 +81,19 @@ Typische Spalten:
 - `item_title`
 - `product_url`
 
-Zusätzlich werden CSV-Dateien erzeugt:
+Additional CSV files are generated:
 
 - `amazon_orders_2025.orders.csv`
 - `amazon_orders_2025.items.csv`
 
-## Hinweise
+## Notes
 
-- Amazon ändert gelegentlich HTML und Button-Texte. Dann müssen in `scraper.py` Selektoren angepasst werden.
-- Das Repo speichert **keine Zugangsdaten**, sondern nur den angemeldeten Browser-Status.
-- `.secrets/` gehört nicht ins Remote-Repo.
+- Amazon occasionally changes HTML and button labels. If that happens, selectors in `scraper.py` must be adjusted.
+- This repository stores **no credentials**, only authenticated browser state.
+- `.secrets/` should not be committed to a remote repository.
 
-## Nächste sinnvolle Schritte
+## Suggested next steps
 
-- erster Realtest mit 2025
-- falls nötig Selektoren feinjustieren
-- danach Import in dein Haushaltsbuch
+- First real test with 2025 data
+- Fine-tune selectors if needed
+- Import into your personal finance workflow
