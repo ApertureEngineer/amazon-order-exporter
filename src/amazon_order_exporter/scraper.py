@@ -258,11 +258,12 @@ class AmazonScraper:
 
     def goto_next_page(self) -> bool:
         page = self.current_page
+        current_url = page.url
         selectors = [
-            "a[aria-label*='Nächste']",
-            "a[aria-label*='Weiter']",
-            "a[aria-label*='Next']",
             "li.a-last a",
+            ".a-pagination a[aria-label*='Nächste']",
+            ".a-pagination a[aria-label*='Weiter']",
+            ".a-pagination a[aria-label*='Next']",
             "a:has-text('Nächste')",
             "a:has-text('Weiter')",
             "a:has-text('Next')",
@@ -272,9 +273,25 @@ class AmazonScraper:
             try:
                 if locator.count() > 0 and locator.first.is_visible():
                     LOGGER.info("Found next-page selector: %s", selector)
+                    candidate_href = locator.first.get_attribute("href") or ""
+                    if candidate_href and "order-history" not in candidate_href and "startIndex=" not in candidate_href:
+                        LOGGER.warning(
+                            "Ignoring next-page candidate because it does not look like order-history pagination: %s",
+                            candidate_href,
+                        )
+                        continue
                     locator.first.click()
                     page.wait_for_load_state("domcontentloaded")
                     time.sleep(2)
+                    if "order-history" not in page.url:
+                        LOGGER.warning(
+                            "Pagination click navigated away from order-history (%s). Returning to %s and stopping pagination.",
+                            page.url,
+                            current_url,
+                        )
+                        page.goto(current_url, wait_until="domcontentloaded")
+                        time.sleep(1)
+                        return False
                     return True
             except Exception:
                 continue

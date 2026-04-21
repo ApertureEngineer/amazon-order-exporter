@@ -15,6 +15,7 @@ class _FakeLocator:
 class _FakePage:
     def __init__(self, text: str):
         self._text = text
+        self.url = "https://www.amazon.de/gp/css/order-history"
 
     def goto(self, *_args, **_kwargs) -> None:
         return None
@@ -27,6 +28,71 @@ class _FakePage:
 
     def close(self) -> None:
         return None
+
+    def wait_for_load_state(self, _state: str) -> None:
+        return None
+
+
+class _GotoNextFakeLink:
+    def __init__(self, page: "_GotoNextFakePage", href: str, visible: bool = True):
+        self._page = page
+        self._href = href
+        self._visible = visible
+        self.click_count = 0
+
+    @property
+    def first(self) -> "_GotoNextFakeLink":
+        return self
+
+    def count(self) -> int:
+        return 1
+
+    def is_visible(self) -> bool:
+        return self._visible
+
+    def get_attribute(self, name: str) -> str | None:
+        if name == "href":
+            return self._href
+        return None
+
+    def click(self) -> None:
+        self.click_count += 1
+        self._page.url = self._page.next_url_after_click
+
+
+class _GotoNextFakeLocator:
+    def __init__(self, link: _GotoNextFakeLink | None):
+        self._link = link
+
+    @property
+    def first(self) -> _GotoNextFakeLink:
+        assert self._link is not None
+        return self._link
+
+    def count(self) -> int:
+        return 0 if self._link is None else 1
+
+
+class _GotoNextFakePage:
+    def __init__(self, href: str, next_url_after_click: str):
+        self.url = "https://www.amazon.de/gp/css/order-history?startIndex=10"
+        self.next_url_after_click = next_url_after_click
+        self.clicked_selector: str | None = None
+        self._link = _GotoNextFakeLink(self, href)
+        self.goto_calls: list[str] = []
+
+    def locator(self, selector: str) -> _GotoNextFakeLocator:
+        if selector == "li.a-last a":
+            self.clicked_selector = selector
+            return _GotoNextFakeLocator(self._link)
+        return _GotoNextFakeLocator(None)
+
+    def wait_for_load_state(self, _state: str) -> None:
+        return None
+
+    def goto(self, url: str, **_kwargs) -> None:
+        self.goto_calls.append(url)
+        self.url = url
 
 
 class _FakeContext:
@@ -119,3 +185,29 @@ def test_extract_items_from_order_history_falls_back_to_detail_page() -> None:
     items = scraper.extract_items_from_order_history(order)
 
     assert items == expected
+
+
+def test_goto_next_page_ignores_non_order_history_candidate() -> None:
+    scraper = AmazonScraper(ScrapeConfig())
+    scraper.page = _GotoNextFakePage(
+        href="https://www.amazon.de/gp/product/B0TEST",
+        next_url_after_click="https://www.amazon.de/gp/product/B0TEST",
+    )
+
+    moved = scraper.goto_next_page()
+
+    assert moved is False
+    assert scraper.page.url == "https://www.amazon.de/gp/css/order-history?startIndex=10"
+
+
+def test_goto_next_page_recovers_when_navigation_leaves_order_history() -> None:
+    scraper = AmazonScraper(ScrapeConfig())
+    scraper.page = _GotoNextFakePage(
+        href="/gp/css/order-history?startIndex=20",
+        next_url_after_click="https://www.amazon.de/gp/product/B0TEST",
+    )
+
+    moved = scraper.goto_next_page()
+
+    assert moved is False
+    assert scraper.page.goto_calls == ["https://www.amazon.de/gp/css/order-history?startIndex=10"]
