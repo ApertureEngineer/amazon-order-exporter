@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from typing import Iterable
@@ -326,6 +326,22 @@ class AmazonScraper:
                     if (text.length < 5 || text.length > 400) return true;
                     if (/^ASIN/i.test(text)) return true;
                     if (/^[0-9]+([.,][0-9]+)?\s*€(\s*[0-9]+([.,][0-9]+)?\s*€)?$/.test(text)) return true;
+
+                    const normalized = text.toLowerCase();
+                    const ctaLabels = [
+                      "view your item",
+                      "track package",
+                      "buy it again",
+                      "write a product review",
+                      "leave seller feedback",
+                      "return or replace items",
+                      "get product support",
+                      "problem with order",
+                      "view order details",
+                      "invoice"
+                    ];
+                    if (ctaLabels.includes(normalized)) return true;
+
                     return false;
                   };
 
@@ -384,7 +400,8 @@ class AmazonScraper:
             if deduped:
                 return deduped
 
-            return self.extract_items_from_summary_text(order)
+            fallback_order = order if fallback_date == order.order_date else replace(order, order_date=fallback_date)
+            return self.extract_items_from_summary_text(fallback_order)
         finally:
             page.close()
 
