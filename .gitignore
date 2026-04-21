@@ -1,0 +1,10 @@
+data/
+.venv/
+.secrets/
+*.egg-info/
+dist/
+build/
+*__pycache__/
+.pytest_cache/
+playwright/.auth/
+amazon_state.json
