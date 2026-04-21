@@ -59,3 +59,27 @@ def test_extract_items_from_order_applies_detail_date_to_summary_fallback() -> N
     assert len(items) == 1
     assert items[0].source == "summary_fallback"
     assert items[0].order_date == date(2025, 3, 3)
+
+
+def test_scrape_items_for_orders_uses_order_history_links() -> None:
+    scraper = AmazonScraper(ScrapeConfig())
+    order = OrderRecord(
+        order_id="111-1234567-1234567",
+        order_date_text="2. Dezember 2024",
+        order_date=date(2024, 12, 2),
+        order_total_text="13,90 €",
+        status_text=None,
+        detail_url="https://example.com/detail",
+        order_url=None,
+        page_no=1,
+        raw_text="raw",
+        item_links=[
+            {"text": "UGREEN USB-C Cable", "href": "https://www.amazon.de/dp/B123"},
+            {"text": "UGREEN USB-C Cable", "href": "https://www.amazon.de/dp/B123"},
+        ],
+    )
+
+    items = scraper.scrape_items_for_orders([order])
+    assert len(items) == 1
+    assert items[0].source == "order_history"
+    assert items[0].item_title == "UGREEN USB-C Cable"

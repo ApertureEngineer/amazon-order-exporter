@@ -164,11 +164,37 @@ class AmazonScraper:
                   text: (a.innerText || '').replace(/\s+/g, ' ').trim(),
                   href: a.href
                 }));
+                const productLinks = links.filter(link => {
+                  const href = link.href || '';
+                  const title = link.text || '';
+                  if (!(href.includes('/dp/') || href.includes('/gp/product/'))) return false;
+                  if (title.length < 6) return false;
+
+                  const lower = title.toLowerCase();
+                  const blacklist = [
+                    "amazon visa",
+                    "amazon business amex card",
+                    "nochmals kaufen",
+                    "deinen artikel anzeigen",
+                    "produktsupport erhalten",
+                    "schreib eine produktrezension",
+                    "dein spar-abo anzeigen",
+                    "status der rücksendung",
+                    "problem bei bestellung",
+                    "rücksendeetikett und anleitung",
+                    "frage zum produkt",
+                    "zu deiner software-bibliothek",
+                    "bestelldetails anzeigen",
+                    "rechnung"
+                  ];
+                  return !blacklist.some(entry => lower.includes(entry));
+                });
 
                 results.push({
                   text,
                   order_ids: Array.from(new Set(ids)),
                   links,
+                  item_links: productLinks,
                 });
               }
               return results;
@@ -202,6 +228,7 @@ class AmazonScraper:
                         "text": block_text,
                         "detail_url": detail_url,
                         "order_url": order_url,
+                        "item_links": block["item_links"],
                     }
 
         records: list[OrderRecord] = []
@@ -220,6 +247,7 @@ class AmazonScraper:
                     order_url=payload["order_url"],
                     page_no=page_no,
                     raw_text=raw_text,
+                    item_links=payload["item_links"],
                 )
             )
 
@@ -228,23 +256,27 @@ class AmazonScraper:
 
     def goto_next_page(self) -> bool:
         page = self.current_page
-        candidates = [
-            page.get_by_role("link", name="Weiter"),
-            page.get_by_role("link", name="Nächste"),
-            page.get_by_role("link", name="Next"),
-            page.locator("a[aria-label*='Weiter']"),
-            page.locator("a[aria-label*='Nächste']"),
-            page.locator("a[aria-label*='Next']"),
+        selectors = [
+            "a[aria-label*='Nächste']",
+            "a[aria-label*='Weiter']",
+            "a[aria-label*='Next']",
+            "li.a-last a",
+            "a:has-text('Nächste')",
+            "a:has-text('Weiter')",
+            "a:has-text('Next')",
         ]
-        for locator in candidates:
+        for selector in selectors:
+            locator = page.locator(selector)
             try:
                 if locator.count() > 0 and locator.first.is_visible():
+                    LOGGER.info("Found next-page selector: %s", selector)
                     locator.first.click()
                     page.wait_for_load_state("domcontentloaded")
                     time.sleep(2)
                     return True
             except Exception:
                 continue
+        LOGGER.info("No next-page selector found.")
         return False
 
     def scrape_orders(
@@ -264,6 +296,7 @@ class AmazonScraper:
         for page_no in range(1, max_pages + 1):
             LOGGER.info("Reading order overview page %s", page_no)
             records = self.extract_order_blocks(page_no=page_no)
+            LOGGER.info("[page %s] url=%s orders=%s", page_no, self.current_page.url, len(records))
             if not records:
                 LOGGER.warning("No order blocks found on page %s", page_no)
                 self.save_debug_html(f"orders_page_{page_no}")
@@ -421,15 +454,40 @@ class AmazonScraper:
             )
         ]
 
+    def extract_items_from_order_history(self, order: OrderRecord) -> list[ItemRecord]:
+        item_links = order.item_links or []
+        results: list[ItemRecord] = []
+        seen: set[tuple[str, str | None]] = set()
+        for item in item_links:
+            title = " ".join((item.get("text") or "").split())
+            href = item.get("href")
+            key = (title, href)
+            if len(title) < 5 or key in seen:
+                continue
+            seen.add(key)
+            results.append(
+                ItemRecord(
+                    order_id=order.order_id,
+                    order_date=order.order_date,
+                    item_title=title,
+                    product_url=href,
+                    source="order_history",
+                )
+            )
+
+        if results:
+            return results
+        return self.extract_items_from_summary_text(order)
+
     def scrape_items_for_orders(self, orders: Iterable[OrderRecord]) -> list[ItemRecord]:
         order_list = list(orders)
         items: list[ItemRecord] = []
         for idx, order in enumerate(order_list, start=1):
-            LOGGER.info("Reading order details %s/%s: %s", idx, len(order_list), order.order_id)
+            LOGGER.info("Reading order items %s/%s: %s", idx, len(order_list), order.order_id)
             try:
-                order_items = self.extract_items_from_order(order)
+                order_items = self.extract_items_from_order_history(order)
                 items.extend(order_items)
                 LOGGER.info("  Found %s items", len(order_items))
             except Exception as exc:
-                LOGGER.exception("Error while reading order details for %s: %s", order.order_id, exc)
+                LOGGER.exception("Error while reading order items for %s: %s", order.order_id, exc)
         return items
