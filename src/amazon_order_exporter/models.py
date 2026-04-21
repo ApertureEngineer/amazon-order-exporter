@@ -16,6 +16,7 @@ class OrderRecord:
     order_url: str | None
     page_no: int
     raw_text: str
+    item_links: list[dict[str, str]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

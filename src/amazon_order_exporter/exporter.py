@@ -32,6 +32,7 @@ def write_outputs(orders: list[OrderRecord], items: list[ItemRecord], output_pat
             "order_url",
             "page_no",
             "raw_text",
+            "item_links",
         ])
 
     if items_df.empty:
