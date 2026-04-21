@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--slow-mo-ms", type=int, default=50)
     export_parser.add_argument("--timeout-ms", type=int, default=30000)
     export_parser.add_argument("--debug-dir", default="data/output/debug")
+    export_parser.add_argument(
+        "--exclude-unknown-dates",
+        action="store_true",
+        help="Exclude orders with unknown/unparsed order dates when date filters are used",
+    )
 
     return parser
 
@@ -85,6 +90,7 @@ def run_export(args: argparse.Namespace) -> int:
         slow_mo_ms=args.slow_mo_ms,
         timeout_ms=args.timeout_ms,
         debug_dir=Path(args.debug_dir) if args.debug_dir else None,
+        include_unknown_dates=not args.exclude_unknown_dates,
     )
 
     with AmazonScraper(config) as scraper:
