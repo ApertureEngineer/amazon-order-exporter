@@ -223,12 +223,13 @@ class AmazonScraper:
                             order_url = href
                             if detail_url is None:
                                 detail_url = href
+                    scoped_item_links = block["item_links"] if len(block["order_ids"]) == 1 else []
                     best_by_order_id[order_id] = {
                         "_score": score,
                         "text": block_text,
                         "detail_url": detail_url,
                         "order_url": order_url,
-                        "item_links": block["item_links"],
+                        "item_links": scoped_item_links,
                     }
 
         records: list[OrderRecord] = []
@@ -477,6 +478,8 @@ class AmazonScraper:
 
         if results:
             return results
+        if order.detail_url:
+            return self.extract_items_from_order(order)
         return self.extract_items_from_summary_text(order)
 
     def scrape_items_for_orders(self, orders: Iterable[OrderRecord]) -> list[ItemRecord]:
