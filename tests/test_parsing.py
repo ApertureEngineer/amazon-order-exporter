@@ -1,6 +1,6 @@
 from datetime import date
 
-from amazon_order_exporter.parsing import parse_date, parse_order_date_text, parse_order_total_text
+from amazon_order_exporter.parsing import in_range, parse_date, parse_order_date_text, parse_order_total_text
 
 
 def test_parse_german_numeric_date() -> None:
@@ -41,3 +41,15 @@ def test_parse_order_date_text_for_bestellung_aufgegeben_without_am() -> None:
 def test_parse_order_total_text_for_summe() -> None:
     text = "BESTELLUNG AUFGEGEBEN 2. Dezember 2024 SUMME 1.213,90 €"
     assert parse_order_total_text(text) == "1.213,90 €"
+
+
+def test_in_range_unknown_date_without_filter_is_included() -> None:
+    assert in_range(None, None, None) is True
+
+
+def test_in_range_unknown_date_with_filter_is_included_by_default() -> None:
+    assert in_range(None, date(2024, 1, 1), date(2024, 12, 31)) is True
+
+
+def test_in_range_unknown_date_with_filter_can_be_excluded() -> None:
+    assert in_range(None, date(2024, 1, 1), date(2024, 12, 31), include_unknown_when_filtered=False) is False

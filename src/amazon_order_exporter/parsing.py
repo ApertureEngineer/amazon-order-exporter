@@ -90,9 +90,16 @@ def parse_date(value: str | None) -> date | None:
     return None
 
 
-def in_range(order_date: date | None, date_from: date | None, date_to: date | None) -> bool:
+def in_range(
+    order_date: date | None,
+    date_from: date | None,
+    date_to: date | None,
+    include_unknown_when_filtered: bool = True,
+) -> bool:
     if order_date is None:
-        return True
+        if date_from is None and date_to is None:
+            return True
+        return include_unknown_when_filtered
     if date_from and order_date < date_from:
         return False
     if date_to and order_date > date_to:

@@ -24,6 +24,7 @@ class ScrapeConfig:
     slow_mo_ms: int = 50
     timeout_ms: int = 30000
     debug_dir: Path | None = None
+    include_unknown_dates: bool = True
 
     @property
     def order_history_url(self) -> str:
@@ -307,7 +308,12 @@ class AmazonScraper:
                 if record.order_id in seen_order_ids:
                     continue
                 seen_order_ids.add(record.order_id)
-                if in_range(record.order_date, date_from, date_to):
+                if in_range(
+                    record.order_date,
+                    date_from,
+                    date_to,
+                    include_unknown_when_filtered=self.config.include_unknown_dates,
+                ):
                     all_records.append(record)
 
             oldest_visible = min((record.order_date for record in records if record.order_date), default=None)
