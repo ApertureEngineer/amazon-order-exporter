@@ -6,6 +6,7 @@ from datetime import date, datetime
 ORDER_ID_RE = re.compile(r"\b\d{3}-\d{7}-\d{7}\b")
 DATE_PATTERNS = [
     re.compile(r"Bestellt am\s+([0-9]{1,2}\.\s*[A-Za-zÄÖÜäöü]+\s*[0-9]{4})", re.IGNORECASE),
+    re.compile(r"Bestellung aufgegeben am\s+([0-9]{1,2}\.\s*[A-Za-zÄÖÜäöü]+\s*[0-9]{4})", re.IGNORECASE),
     re.compile(r"Order placed\s+([A-Za-z]+\s+[0-9]{1,2},\s*[0-9]{4})", re.IGNORECASE),
     re.compile(r"Bestellt am\s+([0-9]{1,2}\.\s*[0-9]{1,2}\.\s*[0-9]{4})", re.IGNORECASE),
     re.compile(r"Order placed\s+([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})", re.IGNORECASE),

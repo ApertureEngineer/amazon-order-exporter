@@ -310,24 +310,52 @@ class AmazonScraper:
             page.goto(detail_url, wait_until="domcontentloaded")
             time.sleep(2)
             self.save_debug_html(f"detail_{order.order_id}", page=page)
+            page_text = page.locator("body").inner_text()
+            fallback_date = order.order_date
+            if fallback_date is None:
+                fallback_date_text = parse_order_date_text(page_text)
+                fallback_date = parse_date(fallback_date_text)
             products = page.evaluate(
                 r"""
                 () => {
-                  const badTexts = new Set([
-                    'Artikel erneut kaufen', 'Nochmals kaufen', 'Bewerten', 'Schreiben Sie eine Produktrezension',
-                    'Zurückgeben oder ersetzen', 'Produktdetails', 'Track package', 'Buy it again', 'View your item'
-                  ]);
                   const anchors = Array.from(document.querySelectorAll("main a[href], #a-page a[href], body a[href]"));
                   const result = [];
+
+                  const isBadText = (text) => {
+                    if (!text) return true;
+                    if (text.length < 5 || text.length > 400) return true;
+                    if (/^ASIN/i.test(text)) return true;
+                    if (/^[0-9]+([.,][0-9]+)?\s*€(\s*[0-9]+([.,][0-9]+)?\s*€)?$/.test(text)) return true;
+                    return false;
+                  };
+
+                  const isBadHref = (href) => {
+                    if (!href) return true;
+
+                    const badPatterns = [
+                      "ci_mcx",
+                      "mr__d_sccl",
+                      "pd_rd_",
+                      "sp_csd",
+                      "cm_cr_arp",
+                      "/gp/buyagain",
+                      "/s?",
+                      "node="
+                    ];
+
+                    return badPatterns.some(p => href.includes(p));
+                  };
+
                   for (const a of anchors) {
                     const href = a.href || '';
-                    if (!(href.includes('/dp/') || href.includes('/gp/product/') || href.includes('/-/en/') || href.includes('/-/de/'))) {
+                    const text = (a.innerText || '').replace(/\s+/g, ' ').trim();
+
+                    if (!(href.includes('/dp/') || href.includes('/gp/product/'))) {
                       continue;
                     }
-                    const text = (a.innerText || '').replace(/\s+/g, ' ').trim();
-                    if (!text || text.length < 5 || text.length > 400) continue;
-                    if (badTexts.has(text)) continue;
-                    if (/^ASIN/i.test(text)) continue;
+                    if (isBadText(text)) continue;
+                    if (isBadHref(href)) continue;
+
                     result.push({title: text, href});
                   }
                   return result;
@@ -346,7 +374,7 @@ class AmazonScraper:
                 deduped.append(
                     ItemRecord(
                         order_id=order.order_id,
-                        order_date=order.order_date,
+                        order_date=fallback_date,
                         item_title=title,
                         product_url=href,
                         source="detail_page",
