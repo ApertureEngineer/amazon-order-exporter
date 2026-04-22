@@ -94,6 +94,9 @@ class _GotoNextFakePage:
         self.goto_calls.append(url)
         self.url = url
 
+    def evaluate(self, _script: str) -> dict:
+        return {"url": self.url, "title": "Orders", "pagination": []}
+
 
 class _FakeContext:
     def __init__(self, text: str):
@@ -211,3 +214,15 @@ def test_goto_next_page_recovers_when_navigation_leaves_order_history() -> None:
 
     assert moved is False
     assert scraper.page.goto_calls == ["https://www.amazon.de/gp/css/order-history?startIndex=10"]
+
+
+def test_goto_next_page_stops_when_url_does_not_change() -> None:
+    scraper = AmazonScraper(ScrapeConfig())
+    scraper.page = _GotoNextFakePage(
+        href="/gp/css/order-history?startIndex=20",
+        next_url_after_click="https://www.amazon.de/gp/css/order-history?startIndex=10",
+    )
+
+    moved = scraper.goto_next_page()
+
+    assert moved is False
