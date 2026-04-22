@@ -281,3 +281,19 @@ def test_login_and_save_session_waits_when_stdin_is_not_interactive(monkeypatch,
     assert scraper.page.goto_calls == ["https://www.amazon.de/gp/css/order-history"]
     assert scraper.page.wait_timeout_calls == [12000]
     assert scraper.context.storage_state_calls == [str(auth_file)]
+
+
+def test_login_and_save_session_does_not_save_when_interactive_input_eof(monkeypatch, tmp_path) -> None:
+    auth_file = tmp_path / "state.json"
+    scraper = AmazonScraper(ScrapeConfig(auth_file=auth_file, login_wait_seconds=12))
+    scraper.page = _LoginFakePage()
+    scraper.context = _LoginFakeContext()
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: (_ for _ in ()).throw(EOFError))
+
+    scraper.login_and_save_session()
+
+    assert scraper.page.goto_calls == ["https://www.amazon.de/gp/css/order-history"]
+    assert scraper.page.wait_timeout_calls == []
+    assert scraper.context.storage_state_calls == []

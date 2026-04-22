@@ -105,12 +105,13 @@ class AmazonScraper:
         page.goto(self.config.order_history_url, wait_until="domcontentloaded")
         LOGGER.info("Please log in to Amazon manually, then press Enter in the terminal.")
         prompt = "Press Enter after login (and 2FA, if required) is complete... "
-        try:
-            if sys.stdin.isatty():
+        if sys.stdin.isatty():
+            try:
                 input(prompt)
-            else:
-                raise EOFError("stdin is not interactive")
-        except EOFError:
+            except EOFError:
+                LOGGER.warning("Login canceled by EOF on interactive input. Session was not saved.")
+                return
+        else:
             wait_ms = max(self.config.login_wait_seconds, 0) * 1000
             LOGGER.warning(
                 "No interactive terminal input detected. Keeping browser open for %s seconds before saving session.",
