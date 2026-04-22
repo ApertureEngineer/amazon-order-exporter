@@ -4,6 +4,7 @@ import logging
 import time
 from dataclasses import dataclass, replace
 from datetime import date
+from json import dumps
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urljoin
@@ -89,6 +90,13 @@ class AmazonScraper:
         current_page = page or self.current_page
         path = debug_dir / f"{name}.html"
         path.write_text(current_page.content(), encoding="utf-8")
+
+    def save_debug_text(self, name: str, content: str) -> None:
+        debug_dir = self.ensure_debug_dir()
+        if not debug_dir:
+            return
+        path = debug_dir / f"{name}.txt"
+        path.write_text(content, encoding="utf-8")
 
     def login_and_save_session(self) -> None:
         page = self.current_page
@@ -256,9 +264,53 @@ class AmazonScraper:
         records.sort(key=lambda record: record.order_id)
         return records
 
-    def goto_next_page(self) -> bool:
+    def _collect_pagination_debug(self) -> dict:
+        page = self.current_page
+        return page.evaluate(
+            r"""
+            () => {
+              const normalize = (txt) => (txt || '').replace(/\s+/g, ' ').trim();
+              const nodes = Array.from(document.querySelectorAll('.a-pagination li, .a-pagination a'));
+              const pagination = nodes
+                .map((node) => {
+                  const anchor = node.tagName.toLowerCase() === 'a' ? node : node.querySelector('a');
+                  return {
+                    node: node.tagName.toLowerCase(),
+                    className: node.className || '',
+                    text: normalize(anchor ? anchor.innerText : node.innerText),
+                    href: anchor ? (anchor.getAttribute('href') || '') : '',
+                    ariaLabel: anchor ? (anchor.getAttribute('aria-label') || '') : '',
+                    disabled: node.classList.contains('a-disabled'),
+                    selected: node.classList.contains('a-selected'),
+                  };
+                })
+                .filter((item) => item.text || item.href || item.ariaLabel);
+
+              return {
+                url: window.location.href,
+                title: document.title,
+                pagination,
+              };
+            }
+            """
+        )
+
+    def _collect_pagination_debug_safe(self, stage: str) -> dict | None:
+        try:
+            return self._collect_pagination_debug()
+        except Exception as exc:
+            LOGGER.debug("Failed to collect pagination debug at %s stage: %s", stage, exc)
+            return None
+
+    def goto_next_page(self, page_no: int | None = None) -> bool:
         page = self.current_page
         current_url = page.url
+        pagination_before = self._collect_pagination_debug_safe("before_click")
+        if page_no is not None and pagination_before is not None:
+            self.save_debug_text(
+                f"pagination_before_{page_no}",
+                dumps(pagination_before, ensure_ascii=False, indent=2),
+            )
         selectors = [
             "li.a-last a",
             ".a-pagination a[aria-label*='Nächste']",
@@ -283,6 +335,12 @@ class AmazonScraper:
                     locator.first.click()
                     page.wait_for_load_state("domcontentloaded")
                     time.sleep(2)
+                    pagination_after = self._collect_pagination_debug_safe("after_click")
+                    if page_no is not None and pagination_after is not None:
+                        self.save_debug_text(
+                            f"pagination_after_{page_no}",
+                            dumps(pagination_after, ensure_ascii=False, indent=2),
+                        )
                     if "order-history" not in page.url:
                         LOGGER.warning(
                             "Pagination click navigated away from order-history (%s). Returning to %s and stopping pagination.",
@@ -291,6 +349,12 @@ class AmazonScraper:
                         )
                         page.goto(current_url, wait_until="domcontentloaded")
                         time.sleep(1)
+                        return False
+                    if page.url == current_url:
+                        LOGGER.warning(
+                            "Pagination click did not change URL (%s). Stopping to avoid repeatedly scraping the same page.",
+                            current_url,
+                        )
                         return False
                     return True
             except Exception:
@@ -342,7 +406,7 @@ class AmazonScraper:
                 LOGGER.info("Reached maximum number of pages: %s", max_pages)
                 break
 
-            if not self.goto_next_page():
+            if not self.goto_next_page(page_no=page_no):
                 break
 
         return all_records
