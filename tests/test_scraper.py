@@ -294,6 +294,20 @@ def test_goto_next_page_continues_when_url_same_but_pagination_changes() -> None
     assert moved is True
 
 
+def test_goto_next_page_accepts_your_orders_overview_url() -> None:
+    scraper = AmazonScraper(ScrapeConfig())
+    scraper.page = _GotoNextFakePage(
+        href="/your-orders/orders?timeFilter=year-2024&startIndex=10&ref_=ppx_yo2ov_dt_b_pagination_1_2",
+        next_url_after_click="https://www.amazon.de/your-orders/orders?timeFilter=year-2024&startIndex=10&ref_=ppx_yo2ov_dt_b_pagination_1_2",
+    )
+    scraper.page.url = "https://www.amazon.de/your-orders/orders?timeFilter=year-2024&ref_=ppx_yo2ov_dt_b_filter_all_y2024"
+
+    moved = scraper.goto_next_page()
+
+    assert moved is True
+    assert scraper.page.goto_calls == []
+
+
 def test_goto_next_page_ignores_pagination_debug_errors() -> None:
     scraper = AmazonScraper(ScrapeConfig())
     scraper.page = _GotoNextEvalErrorFakePage(

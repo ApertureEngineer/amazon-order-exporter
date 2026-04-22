@@ -8,7 +8,7 @@ from datetime import date
 from json import dumps
 from pathlib import Path
 from typing import Iterable
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
@@ -343,6 +343,20 @@ class AmazonScraper:
         after_hrefs = tuple((item.get("href") or "") for item in after_items)
         return before_hrefs != after_hrefs
 
+    def _looks_like_order_overview_url(self, url: str) -> bool:
+        if not url:
+            return False
+        parsed = urlparse(urljoin(self.config.order_history_url, url))
+        path = (parsed.path or "").lower()
+        query = (parsed.query or "").lower()
+        if "order-history" in path:
+            return True
+        if path.rstrip("/").endswith("/your-orders/orders"):
+            return True
+        if "your-orders" in path and ("startindex=" in query or "timefilter=" in query):
+            return True
+        return False
+
     def goto_next_page(self, page_no: int | None = None) -> bool:
         page = self.current_page
         current_url = page.url
@@ -367,10 +381,7 @@ class AmazonScraper:
                 if locator.count() > 0 and locator.first.is_visible():
                     LOGGER.info("Found next-page selector: %s", selector)
                     candidate_href = locator.first.get_attribute("href") or ""
-                    if candidate_href and not any(
-                        marker in candidate_href
-                        for marker in ("order-history", "your-orders", "startIndex=", "timeFilter=")
-                    ):
+                    if candidate_href and not self._looks_like_order_overview_url(candidate_href):
                         LOGGER.warning(
                             "Ignoring next-page candidate because it does not look like order-history pagination: %s",
                             candidate_href,
@@ -385,7 +396,7 @@ class AmazonScraper:
                             f"pagination_after_{page_no}",
                             dumps(pagination_after, ensure_ascii=False, indent=2),
                         )
-                    if "order-history" not in page.url:
+                    if not self._looks_like_order_overview_url(page.url):
                         LOGGER.warning(
                             "Pagination click navigated away from order-history (%s). Returning to %s and stopping pagination.",
                             page.url,
