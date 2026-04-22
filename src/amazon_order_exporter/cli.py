@@ -114,7 +114,7 @@ def run_export(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def run() -> int:
     parser = build_parser()
     args = parser.parse_args()
     configure_logging(verbose=args.verbose)
@@ -127,8 +127,12 @@ def main() -> int:
     raise SystemExit(f"Unknown command: {args.command}")
 
 
-if __name__ == "__main__":
-    code = main()
+def main() -> None:
+    code = run()
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(code)
+
+
+if __name__ == "__main__":
+    main()
