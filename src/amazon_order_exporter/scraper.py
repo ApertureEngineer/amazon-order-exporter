@@ -295,11 +295,18 @@ class AmazonScraper:
             """
         )
 
+    def _collect_pagination_debug_safe(self, stage: str) -> dict | None:
+        try:
+            return self._collect_pagination_debug()
+        except Exception as exc:
+            LOGGER.debug("Failed to collect pagination debug at %s stage: %s", stage, exc)
+            return None
+
     def goto_next_page(self, page_no: int | None = None) -> bool:
         page = self.current_page
         current_url = page.url
-        pagination_before = self._collect_pagination_debug()
-        if page_no is not None:
+        pagination_before = self._collect_pagination_debug_safe("before_click")
+        if page_no is not None and pagination_before is not None:
             self.save_debug_text(
                 f"pagination_before_{page_no}",
                 dumps(pagination_before, ensure_ascii=False, indent=2),
@@ -328,8 +335,8 @@ class AmazonScraper:
                     locator.first.click()
                     page.wait_for_load_state("domcontentloaded")
                     time.sleep(2)
-                    pagination_after = self._collect_pagination_debug()
-                    if page_no is not None:
+                    pagination_after = self._collect_pagination_debug_safe("after_click")
+                    if page_no is not None and pagination_after is not None:
                         self.save_debug_text(
                             f"pagination_after_{page_no}",
                             dumps(pagination_after, ensure_ascii=False, indent=2),
