@@ -318,6 +318,31 @@ class AmazonScraper:
             LOGGER.debug("Failed to collect pagination debug at %s stage: %s", stage, exc)
             return None
 
+    def _pagination_state_changed(self, before: dict | None, after: dict | None) -> bool:
+        if not before or not after:
+            return False
+
+        before_items = before.get("pagination") or []
+        after_items = after.get("pagination") or []
+
+        def selected_labels(items: list[dict]) -> tuple[str, ...]:
+            labels: list[str] = []
+            for item in items:
+                if item.get("selected"):
+                    label = (item.get("text") or item.get("ariaLabel") or item.get("href") or "").strip()
+                    if label:
+                        labels.append(label)
+            return tuple(labels)
+
+        before_selected = selected_labels(before_items)
+        after_selected = selected_labels(after_items)
+        if before_selected and after_selected and before_selected != after_selected:
+            return True
+
+        before_hrefs = tuple((item.get("href") or "") for item in before_items)
+        after_hrefs = tuple((item.get("href") or "") for item in after_items)
+        return before_hrefs != after_hrefs
+
     def goto_next_page(self, page_no: int | None = None) -> bool:
         page = self.current_page
         current_url = page.url
@@ -342,7 +367,10 @@ class AmazonScraper:
                 if locator.count() > 0 and locator.first.is_visible():
                     LOGGER.info("Found next-page selector: %s", selector)
                     candidate_href = locator.first.get_attribute("href") or ""
-                    if candidate_href and "order-history" not in candidate_href and "startIndex=" not in candidate_href:
+                    if candidate_href and not any(
+                        marker in candidate_href
+                        for marker in ("order-history", "your-orders", "startIndex=", "timeFilter=")
+                    ):
                         LOGGER.warning(
                             "Ignoring next-page candidate because it does not look like order-history pagination: %s",
                             candidate_href,
@@ -367,6 +395,12 @@ class AmazonScraper:
                         time.sleep(1)
                         return False
                     if page.url == current_url:
+                        if self._pagination_state_changed(pagination_before, pagination_after):
+                            LOGGER.info(
+                                "Pagination click kept URL (%s) but pagination state changed. Continuing.",
+                                current_url,
+                            )
+                            return True
                         LOGGER.warning(
                             "Pagination click did not change URL (%s). Stopping to avoid repeatedly scraping the same page.",
                             current_url,
