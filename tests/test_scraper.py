@@ -101,6 +101,32 @@ class _GotoNextFakePage:
         return {"url": self.url, "title": "Orders", "pagination": []}
 
 
+class _GotoNextStateChangeFakePage(_GotoNextFakePage):
+    def __init__(self, href: str, next_url_after_click: str):
+        super().__init__(href=href, next_url_after_click=next_url_after_click)
+        self._evaluations = 0
+
+    def evaluate(self, _script: str) -> dict:
+        self._evaluations += 1
+        if self._evaluations == 1:
+            return {
+                "url": self.url,
+                "title": "Orders",
+                "pagination": [
+                    {"text": "1", "href": "/gp/css/order-history?startIndex=0", "ariaLabel": "1", "selected": True},
+                    {"text": "2", "href": "/gp/css/order-history?startIndex=10", "ariaLabel": "2", "selected": False},
+                ],
+            }
+        return {
+            "url": self.url,
+            "title": "Orders",
+            "pagination": [
+                {"text": "1", "href": "/gp/css/order-history?startIndex=0", "ariaLabel": "1", "selected": False},
+                {"text": "2", "href": "/gp/css/order-history?startIndex=10", "ariaLabel": "2", "selected": True},
+            ],
+        }
+
+
 class _GotoNextEvalErrorFakePage(_GotoNextFakePage):
     def evaluate(self, _script: str) -> dict:
         raise RuntimeError("execution context was destroyed")
@@ -254,6 +280,18 @@ def test_goto_next_page_stops_when_url_does_not_change() -> None:
     moved = scraper.goto_next_page()
 
     assert moved is False
+
+
+def test_goto_next_page_continues_when_url_same_but_pagination_changes() -> None:
+    scraper = AmazonScraper(ScrapeConfig())
+    scraper.page = _GotoNextStateChangeFakePage(
+        href="/gp/your-account/order-history?opt=ab&startIndex=10",
+        next_url_after_click="https://www.amazon.de/gp/css/order-history?startIndex=10",
+    )
+
+    moved = scraper.goto_next_page()
+
+    assert moved is True
 
 
 def test_goto_next_page_ignores_pagination_debug_errors() -> None:
