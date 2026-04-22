@@ -46,6 +46,12 @@ amazon-order-exporter login --domain amazon.de
 
 Chromium will open. Log in manually once and then confirm in the terminal by pressing Enter.
 
+If terminal input is not available (for example when launched from a GUI), the login flow now keeps the browser open for 180 seconds by default before saving. You can change this with:
+
+```bash
+amazon-order-exporter login --login-wait-seconds 300 --domain amazon.de
+```
+
 The session is stored locally at:
 
 ```text

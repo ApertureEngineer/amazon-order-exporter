@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from dataclasses import dataclass, replace
 from datetime import date
@@ -26,6 +27,7 @@ class ScrapeConfig:
     timeout_ms: int = 30000
     debug_dir: Path | None = None
     include_unknown_dates: bool = True
+    login_wait_seconds: int = 180
 
     @property
     def order_history_url(self) -> str:
@@ -102,7 +104,20 @@ class AmazonScraper:
         page = self.current_page
         page.goto(self.config.order_history_url, wait_until="domcontentloaded")
         LOGGER.info("Please log in to Amazon manually, then press Enter in the terminal.")
-        input("Press Enter after login (and 2FA, if required) is complete... ")
+        prompt = "Press Enter after login (and 2FA, if required) is complete... "
+        try:
+            if sys.stdin.isatty():
+                input(prompt)
+            else:
+                raise EOFError("stdin is not interactive")
+        except EOFError:
+            wait_ms = max(self.config.login_wait_seconds, 0) * 1000
+            LOGGER.warning(
+                "No interactive terminal input detected. Keeping browser open for %s seconds before saving session.",
+                self.config.login_wait_seconds,
+            )
+            if wait_ms:
+                page.wait_for_timeout(wait_ms)
         self.config.auth_file.parent.mkdir(parents=True, exist_ok=True)
         self.context.storage_state(path=str(self.config.auth_file))
         LOGGER.info("Session saved to %s", self.config.auth_file)
