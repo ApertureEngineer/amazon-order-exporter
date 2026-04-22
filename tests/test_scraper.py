@@ -32,6 +32,9 @@ class _FakePage:
     def wait_for_load_state(self, _state: str) -> None:
         return None
 
+    def wait_for_timeout(self, _timeout_ms: int) -> None:
+        return None
+
 
 class _GotoNextFakeLink:
     def __init__(self, page: "_GotoNextFakePage", href: str, visible: bool = True):
@@ -109,6 +112,26 @@ class _FakeContext:
 
     def new_page(self) -> _FakePage:
         return _FakePage(self._text)
+
+
+class _LoginFakePage:
+    def __init__(self):
+        self.goto_calls: list[str] = []
+        self.wait_timeout_calls: list[int] = []
+
+    def goto(self, url: str, **_kwargs) -> None:
+        self.goto_calls.append(url)
+
+    def wait_for_timeout(self, timeout_ms: int) -> None:
+        self.wait_timeout_calls.append(timeout_ms)
+
+
+class _LoginFakeContext:
+    def __init__(self):
+        self.storage_state_calls: list[str] = []
+
+    def storage_state(self, path: str) -> None:
+        self.storage_state_calls.append(path)
 
 
 def test_extract_items_from_order_applies_detail_date_to_summary_fallback() -> None:
@@ -243,3 +266,34 @@ def test_goto_next_page_ignores_pagination_debug_errors() -> None:
     moved = scraper.goto_next_page()
 
     assert moved is True
+
+
+def test_login_and_save_session_waits_when_stdin_is_not_interactive(monkeypatch, tmp_path) -> None:
+    auth_file = tmp_path / "state.json"
+    scraper = AmazonScraper(ScrapeConfig(auth_file=auth_file, login_wait_seconds=12))
+    scraper.page = _LoginFakePage()
+    scraper.context = _LoginFakeContext()
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    scraper.login_and_save_session()
+
+    assert scraper.page.goto_calls == ["https://www.amazon.de/gp/css/order-history"]
+    assert scraper.page.wait_timeout_calls == [12000]
+    assert scraper.context.storage_state_calls == [str(auth_file)]
+
+
+def test_login_and_save_session_does_not_save_when_interactive_input_eof(monkeypatch, tmp_path) -> None:
+    auth_file = tmp_path / "state.json"
+    scraper = AmazonScraper(ScrapeConfig(auth_file=auth_file, login_wait_seconds=12))
+    scraper.page = _LoginFakePage()
+    scraper.context = _LoginFakeContext()
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: (_ for _ in ()).throw(EOFError))
+
+    scraper.login_and_save_session()
+
+    assert scraper.page.goto_calls == ["https://www.amazon.de/gp/css/order-history"]
+    assert scraper.page.wait_timeout_calls == []
+    assert scraper.context.storage_state_calls == []

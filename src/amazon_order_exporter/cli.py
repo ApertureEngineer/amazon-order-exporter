@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     login_parser.add_argument("--auth-file", default=".secrets/amazon_state.json")
     login_parser.add_argument("--headless", action="store_true", help="Start browser in headless mode")
     login_parser.add_argument("--slow-mo-ms", type=int, default=50)
+    login_parser.add_argument(
+        "--login-wait-seconds",
+        type=int,
+        default=180,
+        help="When terminal input is unavailable, keep browser open for this many seconds before saving session",
+    )
 
     export_parser = subparsers.add_parser("export", help="Export orders and items")
     export_parser.add_argument("--domain", default="amazon.de")
@@ -70,6 +76,7 @@ def run_login(args: argparse.Namespace) -> int:
         auth_file=Path(args.auth_file),
         headless=args.headless,
         slow_mo_ms=args.slow_mo_ms,
+        login_wait_seconds=args.login_wait_seconds,
     )
     with AmazonScraper(config) as scraper:
         scraper.login_and_save_session()
