@@ -1,6 +1,6 @@
 from datetime import date
 
-from amazon_order_exporter.parsing import in_range, parse_date, parse_order_date_text, parse_order_total_text
+from amazon_order_exporter.parsing import ORDER_ID_RE, in_range, parse_date, parse_order_date_text, parse_order_total_text
 
 
 def test_parse_german_numeric_date() -> None:
@@ -41,6 +41,12 @@ def test_parse_order_date_text_for_bestellung_aufgegeben_without_am() -> None:
 def test_parse_order_total_text_for_summe() -> None:
     text = "BESTELLUNG AUFGEGEBEN 2. Dezember 2024 SUMME 1.213,90 €"
     assert parse_order_total_text(text) == "1.213,90 €"
+
+
+def test_order_id_regex_matches_classic_and_digital_orders() -> None:
+    assert ORDER_ID_RE.fullmatch("028-5408935-2527558")
+    assert ORDER_ID_RE.fullmatch("D01-5862153-3736618")
+    assert not ORDER_ID_RE.fullmatch("261-7744337-7172819-EXTRA")
 
 
 def test_in_range_unknown_date_without_filter_is_included() -> None:

@@ -13,7 +13,15 @@ from urllib.parse import urljoin, urlparse
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
 
 from .models import ItemRecord, OrderRecord
-from .parsing import ORDER_ID_RE, in_range, parse_date, parse_order_date_text, parse_order_total_text, parse_status_text
+from .parsing import (
+    ORDER_ID_PATTERN,
+    ORDER_ID_RE,
+    in_range,
+    parse_date,
+    parse_order_date_text,
+    parse_order_total_text,
+    parse_status_text,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -171,10 +179,9 @@ class AmazonScraper:
 
     def extract_order_blocks(self, page_no: int) -> list[OrderRecord]:
         page = self.current_page
-        blocks = page.evaluate(
-            r"""
+        script = r"""
             () => {
-              const orderRegex = /\b\d{3}-\d{7}-\d{7}\b/g;
+              const orderRegex = /__ORDER_ID_PATTERN__/g;
               const nodes = Array.from(document.querySelectorAll('div, section, article, li'));
               const results = [];
 
@@ -225,7 +232,8 @@ class AmazonScraper:
               return results;
             }
             """
-        )
+        script = script.replace("__ORDER_ID_PATTERN__", rf"\b{ORDER_ID_PATTERN}\b")
+        blocks = page.evaluate(script)
 
         best_by_order_id: dict[str, dict] = {}
         for block in blocks:

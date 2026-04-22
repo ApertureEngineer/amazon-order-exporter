@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 
-ORDER_ID_RE = re.compile(r"\b\d{3}-\d{7}-\d{7}\b")
+ORDER_ID_PATTERN = r"(?:D\d{2}|\d{3})-\d{7}-\d{7}"
+ORDER_ID_RE = re.compile(rf"\b{ORDER_ID_PATTERN}\b")
 DATE_PATTERNS = [
     re.compile(r"BESTELLUNG AUFGEGEBEN\s+([0-9]{1,2}\.\s*[A-Za-zÄÖÜäöü]+\s*[0-9]{4})", re.IGNORECASE),
     re.compile(r"Bestellt am\s+([0-9]{1,2}\.\s*[A-Za-zÄÖÜäöü]+\s*[0-9]{4})", re.IGNORECASE),
