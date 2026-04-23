@@ -140,6 +140,31 @@ class _FakeContext:
         return _FakePage(self._text)
 
 
+class _DetailFakePage(_FakePage):
+    def __init__(self, text: str, products: list[dict[str, str]]):
+        super().__init__(text)
+        self._products = products
+        self.goto_calls: list[str] = []
+
+    def goto(self, url: str, **_kwargs) -> None:
+        self.goto_calls.append(url)
+
+    def evaluate(self, _script: str) -> list[dict[str, str]]:
+        return self._products
+
+
+class _DetailFakeContext:
+    def __init__(self, text: str, products: list[dict[str, str]]):
+        self._text = text
+        self._products = products
+        self.pages: list[_DetailFakePage] = []
+
+    def new_page(self) -> _DetailFakePage:
+        page = _DetailFakePage(self._text, self._products)
+        self.pages.append(page)
+        return page
+
+
 class _LoginFakePage:
     def __init__(self):
         self.goto_calls: list[str] = []
@@ -184,6 +209,44 @@ def test_extract_items_from_order_applies_detail_date_to_summary_fallback() -> N
     assert items[0].order_date == date(2025, 3, 3)
 
 
+def test_extract_items_from_order_reads_detail_item_prices() -> None:
+    scraper = AmazonScraper(ScrapeConfig())
+    scraper.context = _DetailFakeContext(
+        "Ihre Bestellung. Bestellung aufgegeben am 2. Dezember 2024",
+        [
+            {
+                "title": "Levi's Herren 512 Slim Taper Jeans",
+                "href": "https://www.amazon.de/dp/B07ZVQW2C7",
+                "item_price_text": "66,70 EUR",
+                "quantity_text": "Menge: 1",
+            }
+        ],
+    )
+    scraper.save_debug_html = lambda *_args, **_kwargs: None
+
+    order = OrderRecord(
+        order_id="111-1234567-1234567",
+        order_date_text="2. Dezember 2024",
+        order_date=date(2024, 12, 2),
+        order_total_text="599,38 EUR",
+        status_text=None,
+        detail_url="https://www.amazon.de/gp/your-account/order-details?orderID=111-1234567-1234567",
+        order_url=None,
+        page_no=1,
+        raw_text="raw",
+    )
+
+    items = scraper.extract_items_from_order(order)
+
+    assert len(items) == 1
+    assert items[0].source == "detail_page"
+    assert items[0].item_price_text == "66,70 EUR"
+    assert items[0].item_price_amount == 66.70
+    assert items[0].order_total_text == "599,38 EUR"
+    assert items[0].order_total_amount == 599.38
+    assert items[0].price_source == "detail_page_unit_price"
+
+
 def test_scrape_items_for_orders_uses_order_history_links() -> None:
     scraper = AmazonScraper(ScrapeConfig())
     order = OrderRecord(
@@ -192,7 +255,7 @@ def test_scrape_items_for_orders_uses_order_history_links() -> None:
         order_date=date(2024, 12, 2),
         order_total_text="13,90 €",
         status_text=None,
-        detail_url="https://example.com/detail",
+        detail_url=None,
         order_url=None,
         page_no=1,
         raw_text="raw",

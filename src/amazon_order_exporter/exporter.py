@@ -42,6 +42,12 @@ def write_outputs(orders: list[OrderRecord], items: list[ItemRecord], output_pat
             "item_title",
             "product_url",
             "source",
+            "item_price_text",
+            "item_price_amount",
+            "quantity_text",
+            "order_total_text",
+            "order_total_amount",
+            "price_source",
         ])
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:

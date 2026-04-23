@@ -18,12 +18,20 @@ from .parsing import (
     ORDER_ID_RE,
     in_range,
     parse_date,
+    parse_money_amount,
     parse_order_date_text,
     parse_order_total_text,
     parse_status_text,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def normalize_text_or_none(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = " ".join(value.split())
+    return normalized or None
 
 
 @dataclass(slots=True)
@@ -487,6 +495,32 @@ class AmazonScraper:
             return url
         return urljoin(f"https://www.{self.config.domain}", url)
 
+    def _make_item_record(
+        self,
+        order: OrderRecord,
+        order_date: date | None,
+        title: str,
+        product_url: str | None,
+        source: str,
+        item_price_text: str | None = None,
+        quantity_text: str | None = None,
+        price_source: str | None = None,
+    ) -> ItemRecord:
+        clean_price_text = normalize_text_or_none(item_price_text)
+        return ItemRecord(
+            order_id=order.order_id,
+            order_date=order_date,
+            item_title=title,
+            product_url=product_url,
+            source=source,
+            item_price_text=clean_price_text,
+            item_price_amount=parse_money_amount(clean_price_text),
+            quantity_text=normalize_text_or_none(quantity_text),
+            order_total_text=order.order_total_text,
+            order_total_amount=parse_money_amount(order.order_total_text),
+            price_source=price_source,
+        )
+
     def extract_items_from_order(self, order: OrderRecord) -> list[ItemRecord]:
         if not order.detail_url:
             return []
@@ -508,7 +542,7 @@ class AmazonScraper:
             products = page.evaluate(
                 r"""
                 () => {
-                  const anchors = Array.from(document.querySelectorAll("main a[href], #a-page a[href], body a[href]"));
+                  const normalize = (text) => (text || '').replace(/\s+/g, ' ').trim();
                   const result = [];
 
                   const isBadText = (text) => {
@@ -518,6 +552,12 @@ class AmazonScraper:
                     if (/^[0-9]+([.,][0-9]+)?\s*€(\s*[0-9]+([.,][0-9]+)?\s*€)?$/.test(text)) return true;
 
                     const normalized = text.toLowerCase();
+                    const blacklist = [
+                      "amazon visa",
+                      "amazon business amex card"
+                    ];
+                    if (blacklist.some(entry => normalized.includes(entry))) return true;
+
                     const ctaLabels = [
                       "view your item",
                       "track package",
@@ -552,38 +592,76 @@ class AmazonScraper:
                     return badPatterns.some(p => href.includes(p));
                   };
 
+                  const purchasedItems = Array.from(document.querySelectorAll('[data-component="purchasedItems"]'));
+                  for (const block of purchasedItems) {
+                    const titleAnchor = block.querySelector('[data-component="itemTitle"] a[href]');
+                    const imageAnchor = block.querySelector('[data-component="itemImage"] a[href]');
+                    const image = block.querySelector('[data-component="itemImage"] img');
+                    const href = (titleAnchor && titleAnchor.href) || (imageAnchor && imageAnchor.href) || '';
+                    const title = normalize(
+                      (titleAnchor && titleAnchor.innerText) ||
+                      (image && image.getAttribute('alt')) ||
+                      ''
+                    );
+                    const priceNode =
+                      block.querySelector('[data-component="unitPrice"] .a-offscreen') ||
+                      block.querySelector('[data-component="unitPrice"]');
+                    const quantityNode = block.querySelector('[data-component="quantity"]');
+                    const itemPriceText = normalize(priceNode ? (priceNode.innerText || priceNode.textContent) : '');
+                    const quantityText = normalize(quantityNode ? (quantityNode.innerText || quantityNode.textContent) : '');
+
+                    if (isBadText(title)) continue;
+                    if (href && isBadHref(href)) continue;
+
+                    result.push({
+                      title,
+                      href,
+                      item_price_text: itemPriceText,
+                      quantity_text: quantityText
+                    });
+                  }
+
+                  if (result.length) return result;
+
+                  const root = document.querySelector('#orderDetails') || document.querySelector('main') || document.body;
+                  const anchors = Array.from(root.querySelectorAll("a[href]"));
                   for (const a of anchors) {
                     const href = a.href || '';
-                    const text = (a.innerText || '').replace(/\s+/g, ' ').trim();
+                    const text = normalize(a.innerText || '');
 
-                    if (!(href.includes('/dp/') || href.includes('/gp/product/'))) {
+                    if (!(href.includes('/dp/') || href.includes('/gp/product/') || href.includes('/gp/video/detail/'))) {
                       continue;
                     }
                     if (isBadText(text)) continue;
                     if (isBadHref(href)) continue;
 
-                    result.push({title: text, href});
+                    result.push({title: text, href, item_price_text: '', quantity_text: ''});
                   }
                   return result;
                 }
                 """
             )
             deduped: list[ItemRecord] = []
-            seen: set[tuple[str, str | None]] = set()
+            seen: set[tuple[str, str | None, str | None]] = set()
             for product in products:
                 title = " ".join((product.get("title") or "").split())
                 href = product.get("href")
-                key = (title, href)
+                item_price_text = normalize_text_or_none(product.get("item_price_text"))
+                quantity_text = normalize_text_or_none(product.get("quantity_text"))
+                key = (title, href, item_price_text)
                 if len(title) < 5 or key in seen:
                     continue
                 seen.add(key)
                 deduped.append(
-                    ItemRecord(
-                        order_id=order.order_id,
+                    self._make_item_record(
+                        order=order,
                         order_date=fallback_date,
-                        item_title=title,
+                        title=title,
                         product_url=href,
                         source="detail_page",
+                        item_price_text=item_price_text,
+                        quantity_text=quantity_text,
+                        price_source="detail_page_unit_price" if item_price_text else None,
                     )
                 )
 
@@ -602,19 +680,33 @@ class AmazonScraper:
         if not summary:
             return []
         return [
-            ItemRecord(
-                order_id=order.order_id,
+            self._make_item_record(
+                order=order,
                 order_date=order.order_date,
-                item_title=summary[:300],
+                title=summary[:300],
                 product_url=None,
                 source="summary_fallback",
+                item_price_text=order.order_total_text,
+                price_source="summary_order_total",
             )
         ]
 
     def extract_items_from_order_history(self, order: OrderRecord) -> list[ItemRecord]:
+        if order.detail_url:
+            detail_results = self.extract_items_from_order(order)
+            if detail_results and any(item.item_price_text for item in detail_results):
+                return detail_results
+            if detail_results and not (order.item_links or []):
+                return detail_results
+
         item_links = order.item_links or []
         results: list[ItemRecord] = []
         seen: set[tuple[str, str | None]] = set()
+        unique_item_count = len({
+            (" ".join((item.get("text") or "").split()), item.get("href"))
+            for item in item_links
+            if len(" ".join((item.get("text") or "").split())) >= 5
+        })
         for item in item_links:
             title = " ".join((item.get("text") or "").split())
             href = item.get("href")
@@ -622,20 +714,21 @@ class AmazonScraper:
             if len(title) < 5 or key in seen:
                 continue
             seen.add(key)
+            item_price_text = order.order_total_text if unique_item_count == 1 else None
             results.append(
-                ItemRecord(
-                    order_id=order.order_id,
+                self._make_item_record(
+                    order=order,
                     order_date=order.order_date,
-                    item_title=title,
+                    title=title,
                     product_url=href,
                     source="order_history",
+                    item_price_text=item_price_text,
+                    price_source="order_total_single_item" if item_price_text else None,
                 )
             )
 
         if results:
             return results
-        if order.detail_url:
-            return self.extract_items_from_order(order)
         return self.extract_items_from_summary_text(order)
 
     def scrape_items_for_orders(self, orders: Iterable[OrderRecord]) -> list[ItemRecord]:

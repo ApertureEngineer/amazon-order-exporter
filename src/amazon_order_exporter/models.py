@@ -31,6 +31,12 @@ class ItemRecord:
     item_title: str
     product_url: str | None
     source: str
+    item_price_text: str | None = None
+    item_price_amount: float | None = None
+    quantity_text: str | None = None
+    order_total_text: str | None = None
+    order_total_amount: float | None = None
+    price_source: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

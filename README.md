@@ -4,7 +4,7 @@ A small private Python repository to export product data from Amazon order histo
 
 ## Goal
 
-This repository fetches **only order data and product titles**.
+This repository fetches **order data, product titles, and available item price context**.
 
 It does **not** perform business classification such as `personal` vs `commercial`. That classification can be done later manually or in a separate repository.
 
@@ -13,6 +13,7 @@ It does **not** perform business classification such as `personal` vs `commercia
 - Manual login with local session file
 - Export for a fiscal year or a custom date range
 - Product titles from order overview and order detail pages
+- Item-level unit prices from order detail pages where Amazon exposes them
 - Output to Excel (`orders`, `items`) and CSV
 - Optional debug HTML for selector adjustments
 
@@ -86,6 +87,10 @@ Typical columns:
 - `detail_url`
 - `item_title`
 - `product_url`
+- `item_price_text`
+- `item_price_amount`
+- `quantity_text`
+- `price_source`
 
 Additional CSV files are generated:
 
@@ -95,6 +100,7 @@ Additional CSV files are generated:
 ## Notes
 
 - Amazon occasionally changes HTML and button labels. If that happens, selectors in `scraper.py` must be adjusted.
+- Amazon payments can be split across shipments, gift cards, refunds, or delayed charges. Item prices and order totals make bank reconciliation easier, but they may not always match a bank transaction one-to-one.
 - This repository stores **no credentials**, only authenticated browser state.
 - `.secrets/` should not be committed to a remote repository.
 

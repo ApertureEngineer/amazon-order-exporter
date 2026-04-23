@@ -62,6 +62,28 @@ def parse_order_total_text(text: str) -> str | None:
     return find_first(TOTAL_PATTERNS, text)
 
 
+def parse_money_amount(value: str | None) -> float | None:
+    if not value:
+        return None
+
+    normalized = normalize_whitespace(value).replace("\xa0", " ")
+    match = re.search(
+        r"([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2}|[0-9]+,[0-9]{2}|[0-9]+(?:\.[0-9]{2})?)",
+        normalized,
+    )
+    if not match:
+        return None
+
+    amount = match.group(1)
+    if "," in amount:
+        amount = amount.replace(".", "").replace(",", ".")
+
+    try:
+        return float(amount)
+    except ValueError:
+        return None
+
+
 def parse_status_text(text: str) -> str | None:
     return find_first(STATUS_PATTERNS, text)
 
