@@ -86,6 +86,7 @@ Typical columns:
 - `status_text`
 - `detail_url`
 - `item_title`
+- `item_title_short`
 - `product_url`
 - `item_price_text`
 - `item_price_amount`
