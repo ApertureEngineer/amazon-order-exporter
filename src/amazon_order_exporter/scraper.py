@@ -594,6 +594,44 @@ class AmazonScraper:
 
                   const purchasedItems = Array.from(document.querySelectorAll('[data-component="purchasedItems"]'));
                   for (const block of purchasedItems) {
+                    const componentName = (node) => node.getAttribute('data-component') || '';
+                    const components = Array.from(block.querySelectorAll('[data-component]')).filter((node) => {
+                      return ['itemImage', 'itemTitle', 'unitPrice', 'quantity'].includes(componentName(node));
+                    });
+                    const titleComponents = components.filter((node) => componentName(node) === 'itemTitle');
+
+                    for (const titleComponent of titleComponents) {
+                      const titleAnchor = titleComponent.querySelector('a[href]');
+                      const title = normalize(titleAnchor ? titleAnchor.innerText : '');
+                      const href = titleAnchor ? titleAnchor.href : '';
+                      const titleIndex = components.indexOf(titleComponent);
+                      const nextTitleIndex = components.findIndex((node, idx) => {
+                        return idx > titleIndex && componentName(node) === 'itemTitle';
+                      });
+                      const followingComponents = nextTitleIndex === -1
+                        ? components.slice(titleIndex + 1)
+                        : components.slice(titleIndex + 1, nextTitleIndex);
+                      const priceComponent = followingComponents.find((node) => componentName(node) === 'unitPrice');
+                      const priceNode = priceComponent
+                        ? (priceComponent.querySelector('.a-offscreen') || priceComponent)
+                        : null;
+                      const quantityNode = followingComponents.find((node) => componentName(node) === 'quantity');
+                      const itemPriceText = normalize(priceNode ? (priceNode.innerText || priceNode.textContent) : '');
+                      const quantityText = normalize(quantityNode ? (quantityNode.innerText || quantityNode.textContent) : '');
+
+                      if (isBadText(title)) continue;
+                      if (href && isBadHref(href)) continue;
+
+                      result.push({
+                        title,
+                        href,
+                        item_price_text: itemPriceText,
+                        quantity_text: quantityText
+                      });
+                    }
+
+                    if (titleComponents.length) continue;
+
                     const titleAnchor = block.querySelector('[data-component="itemTitle"] a[href]');
                     const imageAnchor = block.querySelector('[data-component="itemImage"] a[href]');
                     const image = block.querySelector('[data-component="itemImage"] img');
