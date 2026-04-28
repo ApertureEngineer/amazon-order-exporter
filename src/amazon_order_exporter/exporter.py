@@ -30,10 +30,24 @@ class ExportPaths:
         self.items_csv_path = xlsx_path.with_suffix(".items.csv")
 
 
-def _shorten_product_url(url: str | None) -> str | None:
-    if not url:
+def _clean_optional_text(value: object) -> str | None:
+    if value is None:
         return None
+    if not isinstance(value, str):
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
+        value = str(value)
+    normalized = value.strip()
+    return normalized or None
 
+
+def _shorten_product_url(url: object) -> str | None:
+    url = _clean_optional_text(url)
+    if url is None:
+        return None
     parsed = urlparse(url)
     path_parts = [part for part in parsed.path.split("/") if part]
     asin = None
@@ -48,8 +62,9 @@ def _shorten_product_url(url: str | None) -> str | None:
     return _shorten_url_query(url)
 
 
-def _shorten_order_url(url: str | None) -> str | None:
-    if not url:
+def _shorten_order_url(url: object) -> str | None:
+    url = _clean_optional_text(url)
+    if url is None:
         return None
     return _shorten_url_query(url, preferred_keys=ORDER_QUERY_KEYS, fallback_keys=FALLBACK_QUERY_KEYS)
 
@@ -80,8 +95,9 @@ def _shorten_url_query(
     return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", urlencode(keep), ""))
 
 
-def _shorten_item_title(title: str | None) -> str | None:
-    if not title:
+def _shorten_item_title(title: object) -> str | None:
+    title = _clean_optional_text(title)
+    if title is None:
         return None
 
     normalized = " ".join(title.split())

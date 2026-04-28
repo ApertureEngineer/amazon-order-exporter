@@ -1,9 +1,11 @@
 from datetime import date
+from math import nan
 
 from amazon_order_exporter.exporter import (
     _prepare_items_df,
     _prepare_orders_df,
     _shorten_item_title,
+    _shorten_order_url,
     _shorten_product_url,
 )
 from amazon_order_exporter.models import ItemRecord, OrderRecord
@@ -19,6 +21,25 @@ def test_shorten_product_url_uses_canonical_dp_url() -> None:
     assert (
         _shorten_product_url("https://www.amazon.de/gp/product/B09YM3V7NX?pd_rd_w=abc&ref_=x")
         == "https://www.amazon.de/dp/B09YM3V7NX"
+    )
+
+
+def test_shorten_helpers_accept_missing_values() -> None:
+    assert _shorten_product_url(None) is None
+    assert _shorten_product_url(nan) is None
+    assert _shorten_order_url(None) is None
+    assert _shorten_order_url(nan) is None
+    assert _shorten_item_title(None) is None
+    assert _shorten_item_title(nan) is None
+
+
+def test_shorten_order_url_keeps_order_id() -> None:
+    assert (
+        _shorten_order_url(
+            "https://www.amazon.de/your-orders/pop?ref=ppx_yo2ov_dt_b_pop&"
+            "orderId=028-5408935-2527558&lineItemId=x&shipmentId=y&packageId=1&asin=B077XHDRNM"
+        )
+        == "https://www.amazon.de/your-orders/pop?orderId=028-5408935-2527558"
     )
 
 
@@ -56,10 +77,7 @@ def test_prepare_orders_df_shortens_order_urls() -> None:
                     "https://www.amazon.de/your-orders/order-details?"
                     "orderID=028-5408935-2527558&ref=ppx_yo2ov_dt_b_fed_order_details"
                 ),
-                order_url=(
-                    "https://www.amazon.de/your-orders/pop?ref=ppx_yo2ov_dt_b_pop&"
-                    "orderId=028-5408935-2527558&lineItemId=x&shipmentId=y&packageId=1&asin=B077XHDRNM"
-                ),
+                order_url=None,
                 page_no=1,
                 raw_text="raw",
             )
@@ -69,9 +87,7 @@ def test_prepare_orders_df_shortens_order_urls() -> None:
     assert orders_df.loc[0, "detail_url"] == (
         "https://www.amazon.de/your-orders/order-details?orderID=028-5408935-2527558"
     )
-    assert orders_df.loc[0, "order_url"] == (
-        "https://www.amazon.de/your-orders/pop?orderId=028-5408935-2527558"
-    )
+    assert orders_df.loc[0, "order_url"] is None
 
 
 def test_prepare_items_df_adds_short_title_and_shortens_product_url() -> None:
